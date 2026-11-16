@@ -25,11 +25,24 @@ MINE_DAMAGE = 25
 BOOST_TICKS = 40
 SPAWN_CHANCE = 0.35
 
+SHIELD_TICKS = 30
+FRENZY_TICKS = 30
+FRENZY_MULTIPLIER = 3
+HEAL_AMOUNT = 40
+
 
 class Kind(Enum):
     FISH = "fish"       # edible, size 1-3
     MINE = "mine"       # damages the shark on contact
     BOOST = "boost"     # temporarily doubles XP
+
+
+class Card(Enum):
+    """Single-use power-ups. Each card is removed from the hand when played."""
+
+    SHIELD = "shield"   # the next mine does no damage
+    FRENZY = "frenzy"   # XP is multiplied for a while
+    HEAL = "heal"       # restore HP
 
 
 @dataclass
@@ -62,9 +75,37 @@ class Game:
     shark: Shark = field(default_factory=Shark)
     creatures: list[Creature] = field(default_factory=list)
     events: list[str] = field(default_factory=list)
+    hand: list[Card] = field(default_factory=list)
+    shield_ticks: int = 0
+    frenzy_ticks: int = 0
 
     def __post_init__(self) -> None:
         self._rng = random.Random(self.seed)
+        self._draw_card()  # one starting card
+
+    def _draw_card(self) -> None:
+        card = self._rng.choice(list(Card))
+        self.hand.append(card)
+        self.events.append(f"Drew a {card.value} card.")
+
+    def play_card(self, index: int = 0) -> str:
+        """Use one card from the hand. It is consumed and cannot be used again."""
+        if not self.hand:
+            return "No cards in hand."
+        if index < 0 or index >= len(self.hand):
+            raise IndexError(f"no card at position {index}")
+        card = self.hand.pop(index)
+        if card is Card.SHIELD:
+            self.shield_ticks = SHIELD_TICKS
+            msg = f"Shield up for {SHIELD_TICKS} ticks."
+        elif card is Card.FRENZY:
+            self.frenzy_ticks = FRENZY_TICKS
+            msg = f"Frenzy! XP x{FRENZY_MULTIPLIER} for {FRENZY_TICKS} ticks."
+        else:
+            self.shark.hp = min(self.shark.max_hp, self.shark.hp + HEAL_AMOUNT)
+            msg = f"Healed {HEAL_AMOUNT} HP."
+        self.events.append(f"Played {card.value}: {msg}")
+        return msg
 
     # ----- state queries -------------------------------------------------
 
@@ -127,10 +168,19 @@ class Game:
             self.shark.boost_ticks = BOOST_TICKS
             self.events.append("Boost! XP doubled for a while.")
         elif c.kind is Kind.MINE:
-            self.shark.hp = max(0, self.shark.hp - MINE_DAMAGE)
-            self.events.append(f"Hit a mine! -{MINE_DAMAGE} HP.")
+            if self.shield_ticks:
+                self.shield_ticks = 0
+                self.events.append("Shield blocked a mine.")
+            else:
+                self.shark.hp = max(0, self.shark.hp - MINE_DAMAGE)
+                self.events.append(f"Hit a mine! -{MINE_DAMAGE} HP.")
         elif c.size <= self.shark.size:
-            gain = c.size * 10 * (2 if self.shark.boost_ticks else 1)
+            multiplier = 1
+            if self.shark.boost_ticks:
+                multiplier *= 2
+            if self.frenzy_ticks:
+                multiplier *= FRENZY_MULTIPLIER
+            gain = c.size * 10 * multiplier
             self.shark.xp += gain
             self.score += gain
             self.events.append(f"Ate a size-{c.size} fish (+{gain} XP).")
@@ -146,10 +196,13 @@ class Game:
             self.shark.max_hp += 10
             self.shark.hp = min(self.shark.max_hp, self.shark.hp + 20)
             self.events.append(f"Grew to level {self.shark.level}!")
+            self._draw_card()
 
     def _tick_boost(self) -> None:
         if self.shark.boost_ticks:
             self.shark.boost_ticks -= 1
+        if self.frenzy_ticks:
+            self.frenzy_ticks -= 1
 
 
 # ----- rendering ---------------------------------------------------------
@@ -176,4 +229,10 @@ def render(game: Game) -> str:
     )
     if s.boost_ticks:
         status += f"  [boost {s.boost_ticks}]"
+    if game.frenzy_ticks:
+        status += f"  [frenzy {game.frenzy_ticks}]"
+    if game.shield_ticks:
+        status += f"  [shield {game.shield_ticks}]"
+    hand = ", ".join(c.value for c in game.hand) or "empty"
+    status += f"\nhand: {hand}"
     return "\n".join(rows) + "\n" + status

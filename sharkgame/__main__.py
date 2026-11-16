@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
 
     game = Game(seed=args.seed)
     print("Eat smaller fish (digits), dodge mines (*), grab boosts (+).")
-    print("Keys: u = up, d = down, enter = stay, q = quit.\n")
+    print("Keys: u = up, d = down, enter = stay, p = play first card, q = quit.\n")
 
     while not game.over:
         if args.auto:
@@ -58,9 +58,13 @@ def main(argv: list[str] | None = None) -> int:
                 break
             if key == "q":
                 break
+            if key == "p":
+                print("  " + game.play_card(0))
+                print(render(game))
+                continue  # playing a card does not use up a tick
             action = {"u": "up", "d": "down", "": "stay"}.get(key)
             if action is None:
-                print("Unknown key. Use u, d, enter or q.")
+                print("Unknown key. Use u, d, enter, p or q.")
                 continue
 
         game.step(action)

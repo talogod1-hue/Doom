@@ -109,12 +109,67 @@ class DeterminismTests(unittest.TestCase):
         self.assertGreater(game.score, 0)
 
 
+class CardTests(unittest.TestCase):
+    def setUp(self):
+        self.game = g.Game(seed=1)
+        self.game.creatures.clear()
+        self.game.hand.clear()
+        self.game._rng.random = lambda: 1.0  # no spawns
+
+    def test_game_starts_with_one_card(self):
+        self.assertEqual(len(g.Game(seed=4).hand), 1)
+
+    def test_card_is_consumed_on_play(self):
+        self.game.hand = [g.Card.HEAL]
+        self.game.shark.hp = 50
+        self.game.play_card(0)
+        self.assertEqual(self.game.hand, [])
+        self.assertEqual(self.game.shark.hp, 90)
+        self.assertEqual(self.game.play_card(0), "No cards in hand.")
+
+    def test_heal_is_capped_at_max_hp(self):
+        self.game.hand = [g.Card.HEAL]
+        self.game.shark.hp = 95
+        self.game.play_card(0)
+        self.assertEqual(self.game.shark.hp, self.game.shark.max_hp)
+
+    def test_shield_blocks_exactly_one_mine(self):
+        self.game.hand = [g.Card.SHIELD]
+        self.game.play_card(0)
+        place(self.game, g.Kind.MINE, lane=1, x=g.SHARK_X + 1)
+        self.game.step("stay")
+        self.assertEqual(self.game.shark.hp, 100)
+        place(self.game, g.Kind.MINE, lane=1, x=g.SHARK_X + 1)
+        self.game.step("stay")
+        self.assertEqual(self.game.shark.hp, 100 - g.MINE_DAMAGE)
+
+    def test_frenzy_triples_xp(self):
+        self.game.hand = [g.Card.FRENZY]
+        self.game.play_card(0)
+        place(self.game, g.Kind.FISH, lane=1, x=g.SHARK_X + 1, size=1)
+        self.game.step("stay")
+        self.assertEqual(self.game.score, 10 * g.FRENZY_MULTIPLIER)
+
+    def test_bad_index_raises(self):
+        self.game.hand = [g.Card.HEAL]
+        with self.assertRaises(IndexError):
+            self.game.play_card(3)
+
+    def test_level_up_draws_a_card(self):
+        self.game.shark.xp = g.XP_PER_LEVEL - 10
+        before = len(self.game.hand)
+        place(self.game, g.Kind.FISH, lane=1, x=g.SHARK_X + 1, size=1)
+        self.game.step("stay")
+        self.assertEqual(self.game.shark.level, 2)
+        self.assertEqual(len(self.game.hand), before + 1)
+
+
 class RenderTests(unittest.TestCase):
     def test_render_shows_shark_and_status(self):
         out = g.render(g.Game(seed=1))
         self.assertIn("S", out)
         self.assertIn("level 1", out)
-        self.assertEqual(len(out.splitlines()), g.LANES + 1)
+        self.assertEqual(len(out.splitlines()), g.LANES + 2)  # lanes, status, hand
 
 
 if __name__ == "__main__":

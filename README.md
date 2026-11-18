@@ -23,10 +23,25 @@ python3 -m jarvis --once "what is 12 * 7"  # single request
 
 Notes are stored in `~/.jarvis_notes.json` (override with `JARVIS_NOTES_FILE`).
 
+## Remove dead space from a video
+
+`deadspace` cuts silent stretches (and optionally black frames) out of any video that ffmpeg can read. It needs `ffmpeg` and `ffprobe` on your PATH.
+
+```bash
+python3 -m deadspace talk.mp4                        # cut silence -> talk_nodead.mp4
+python3 -m deadspace talk.mp4 --mode both            # cut only where black AND silent
+python3 -m deadspace talk.mp4 --dry-run              # report cuts, write nothing
+python3 -m deadspace talk.mp4 --noise-db -40 --min-dead 2 --pad 0.3 -o out.mp4
+```
+
+Options: `--mode silence|black|both`, `--noise-db` (audio below this is silent, default -35), `--min-dead` (shortest cut in seconds, default 1.0), `--pad` (seconds kept at each edge of a cut, default 0.25), `--black-threshold`, `--crf` (x264 quality, default 20). Output is re-encoded to H.264/AAC.
+
+Tests for it are included in the test command above (`tests/test_deadspace.py`).
+
 ## Test
 
 ```bash
-python3 -m unittest tests.test_jarvis -v
+python3 -m unittest tests.test_jarvis tests.test_deadspace -v
 ```
 
 ## Layout
@@ -38,6 +53,8 @@ python3 -m unittest tests.test_jarvis -v
 | `jarvis/brain.py` | Anthropic Messages API client (stdlib HTTP) |
 | `jarvis/persona.py` | Jarvis system prompt |
 | `jarvis/voice.py` | Optional OS speech output |
+| `deadspace/core.py` | Video dead-space detection (ffmpeg) and cutting |
+| `deadspace/__main__.py` | `python3 -m deadspace` command line |
 
 ## Not yet included
 

@@ -41,7 +41,7 @@ Tests for it are included in the test command above (`tests/test_deadspace.py`).
 ## Test
 
 ```bash
-python3 -m unittest tests.test_jarvis tests.test_deadspace -v
+python3 -m unittest tests.test_jarvis tests.test_deadspace tests.test_storyvid -v
 ```
 
 ## Layout
@@ -59,3 +59,41 @@ python3 -m unittest tests.test_jarvis tests.test_deadspace -v
 ## Not yet included
 
 Speech input (microphone), wake word, and device control (smart home, app launching). These need extra dependencies and platform-specific setup; they can be added as separate modules without changing the core.
+
+## Daily story videos (storyvid)
+
+Turns the next story in a queue into a vertical video and uploads it to YouTube. Free to run: stories are yours, narration uses gTTS, visuals and assembly use ffmpeg, and uploads use the YouTube Data API.
+
+1. Install the one extra dependency: `pip3 install gTTS` (ffmpeg and ffprobe must be on PATH).
+2. Add stories as `.txt` files in `storyvid/stories/queue/`. The first line is the title, the rest is the narration. Name files so they sort in posting order, e.g. `002-the-haunted-mine.txt`.
+3. Test without uploading: `python3 -m storyvid run --dry-run`. The video lands in `storyvid/out/`.
+4. Build and archive without uploading: `python3 -m storyvid run --no-upload`.
+5. Full run: `python3 -m storyvid run`. It uploads, then moves the story to `storyvid/stories/posted/`.
+
+Uploads are `private` by default. Set `YOUTUBE_PRIVACY=public` once you're happy with the output.
+
+### YouTube credentials (one-time)
+
+1. In Google Cloud Console, create a project, enable **YouTube Data API v3**, and create an **OAuth client ID** (type: Desktop app).
+2. Get a refresh token for scope `https://www.googleapis.com/auth/youtube.upload` (for example with Google's OAuth Playground, using your own client ID and secret).
+3. Export the values:
+
+```bash
+export YOUTUBE_CLIENT_ID=...
+export YOUTUBE_CLIENT_SECRET=...
+export YOUTUBE_REFRESH_TOKEN=...
+```
+
+The default quota is 10,000 units a day, and each upload costs about 1,600, so you can post roughly 6 videos a day. Google may limit uploads from an unverified API project to private until the project is audited.
+
+### Daily schedule
+
+Add a cron entry (adjust the paths and time):
+
+```bash
+0 9 * * * cd /home/user/Doom && YOUTUBE_CLIENT_ID=... YOUTUBE_CLIENT_SECRET=... YOUTUBE_REFRESH_TOKEN=... python3 -m storyvid run >> storyvid/out/cron.log 2>&1
+```
+
+Each run logs to `storyvid/out/log.jsonl`. If the queue is empty, the run fails with a clear message, so add stories ahead of time.
+
+Tests: `python3 -m unittest tests.test_storyvid -v`
